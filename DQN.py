@@ -31,17 +31,16 @@ COPY_STEPS = 10
 
 def create_model(input_size, output_size):
     inputs = tf.keras.Input(shape=input_size)
-    x = layers.Conv2D(16, kernel_size=(3, 3), activation=tf.nn.relu, padding='same')(inputs)
+    x = layers.Conv2D(16, kernel_size=(3, 3), activation=tf.nn.tanh, padding='same')(inputs)
     x = layers.BatchNormalization()(x)
-    x = layers.Conv2D(32, kernel_size=(3, 3), activation=tf.nn.relu, padding='same')(x)
+    x = layers.Conv2D(32, kernel_size=(3, 3), activation=tf.nn.tanh, padding='same')(x)
     x = layers.BatchNormalization()(x)
-    x = layers.Conv2D(16, kernel_size=(3, 3), activation=tf.nn.relu, padding='same')(x)
+    x = layers.Conv2D(16, kernel_size=(3, 3), activation=tf.nn.tanh, padding='same')(x)
     x = layers.BatchNormalization()(x)
-    x = layers.Conv2D(16, kernel_size=(3, 3), activation=tf.nn.leaky_relu, padding='same')(x)
+    x = layers.Conv2D(16, kernel_size=(3, 3), activation=tf.nn.tanh, padding='same')(x)
     x = layers.BatchNormalization()(x)
-    # x = layers.GlobalAvgPool2D()(x)
     x = layers.Flatten()(x)
-    x = layers.Dense(16, activation=tf.nn.relu)(x)
+    x = layers.Dense(512, activation=tf.nn.tanh)(x)
     x = layers.Dropout(0.25)(x)
     outputs = layers.Dense(output_size, activation='linear')(x)
 
@@ -64,14 +63,14 @@ class DQNAgent:
         self.epsilon = 1.0
         self.epsilon_decay = 0.998
         self.epsilon_min = 0.01
-        self.batch_size = 16
+        self.batch_size = 256
         self.train_start = 5000
         self.state_size = STATE_SIZE
         self.model = self.build_model()
         self.optimizer = Adam(learning_rate=self.learning_rate)
         self.target_model = self.build_model()
         self.update_target_model()
-        self.memory = deque(maxlen=10000)
+        self.memory = deque(maxlen=30000)
 
         if self.load:
             self.load_model()
@@ -179,12 +178,12 @@ if __name__ == "__main__":
     train_agent = DQNAgent()
     total_scores = np.empty(EPISODES)
     for e in range(EPISODES):
-        train_agent.update_epsilon()
 
         state = env.reset()
         check_list = env.check_if_reward(state)
         goal = check_list['if_goal']  # done
         wumpus = check_list['if_wumpus']  # done
+        iteration = 0
 
         losses = []
         score = 0  # done
@@ -204,7 +203,12 @@ if __name__ == "__main__":
 
             loss = train_agent.train_replay()
             losses.append(loss)
+
+            iteration += 1
             if goal or wumpus:
+                train_agent.update_epsilon()
+                break
+            elif iteration % 200 == 0:
                 break
 
         if e % COPY_STEPS == 0:
