@@ -63,7 +63,7 @@ class DQNAgent:
         self.epsilon = 1.0
         self.epsilon_decay = 0.998
         self.epsilon_min = 0.01
-        self.batch_size = 256
+        self.batch_size = 16
         self.train_start = 5000
         self.state_size = STATE_SIZE
         self.model = self.build_model()
