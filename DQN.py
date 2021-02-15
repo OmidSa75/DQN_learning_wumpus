@@ -26,7 +26,7 @@ if physical_devices:
 
 EPISODES = 5000
 STATE_SIZE = 225
-COPY_STEPS = 10
+COPY_STEPS = 500
 
 
 def create_model(input_size, output_size):
@@ -152,7 +152,7 @@ class DQNAgent:
 
     def learning_rate_decay(self):
         lr = self.optimizer.lr.numpy()
-        lr = max(self.lr_decay * lr, 0.0001)
+        lr = max(self.lr_decay * lr, 0.001)
         self.optimizer.lr.assign(lr)
 
 
@@ -192,8 +192,6 @@ if __name__ == "__main__":
             iteration += 1
             if goal or wumpus:
                 agent.update_epsilon()
-                break
-            elif iteration % 200 == 0:
                 break
 
             if iteration % COPY_STEPS == 0:
