@@ -61,16 +61,17 @@ class DQNAgent:
         self.learning_rate = 0.1
         self.lr_decay = 0.95
         self.epsilon = 1.0
-        self.epsilon_decay = 0.998
+        self.epsilon_decay = 0.999
         self.epsilon_min = 0.01
-        self.batch_size = 16
+        self.batch_size = 32
         self.train_start = 5000
         self.state_size = STATE_SIZE
         self.model = self.build_model()
         self.optimizer = Adam(learning_rate=self.learning_rate)
+        self.mse = tf.keras.losses.MeanSquaredError()
         self.target_model = self.build_model()
         self.update_target_model()
-        self.memory = deque(maxlen=30000)
+        self.memory = deque(maxlen=100000)
 
         if self.load:
             self.load_model()
@@ -104,10 +105,11 @@ class DQNAgent:
         self.memory.append([state, action, reward, next_state, goal])
 
     def update_target_model(self):
-        variables1 = self.target_model.trainable_variables
-        variables2 = self.model.trainable_variables
-        for v1, v2 in zip(variables1, variables2):
-            v1.assign(v2.numpy())
+        # variables1 = self.target_model.trainable_variables
+        # variables2 = self.model.trainable_variables
+        # for v1, v2 in zip(variables1, variables2):
+        #     v1.assign(v2.numpy())
+        self.target_model.set_weights(self.model.get_weights())
 
     def train_replay(self):
         if len(self.memory) <= self.train_start:
@@ -127,8 +129,8 @@ class DQNAgent:
 
         with tf.GradientTape() as tape:
             selected_action_values = tf.math.reduce_sum(self.model(states) * tf.one_hot(actions, 4),
-                                                        axis=1)  # [2, 3, 1]  [[0 , 0, 1, 0], [0, 0, 0, 1], [0, 1, 0, 0]]
-            loss = tf.math.reduce_mean(tf.square(actual_values - selected_action_values))
+                                                        axis=1)
+            loss = self.mse(actual_values, selected_action_values)
 
         variables = self.model.trainable_variables
         gradients = tape.gradient(loss, variables)
@@ -154,28 +156,11 @@ class DQNAgent:
         self.optimizer.lr.assign(lr)
 
 
-def test(env, train_agent: DQNAgent):
-    score = 0
-    steps = 0
-    state = env.reset()  # done
-    check_list = env.check_if_reward(state)
-    goal = check_list['if_goal']  #
-    wumpus = check_list['if_wumpus']
-    train_agent.epsilon = 0
-    while not goal or not wumpus:
-        action = train_agent.select_action(state)
-        state, reward, goal, wumpus = env.step(action)
-        steps += 1
-        score += reward
-
-    print("Testing steps: {} score: {} ".format(steps, score))
-
-
 if __name__ == "__main__":
 
     # create environment
     env = Env()
-    train_agent = DQNAgent()
+    agent = DQNAgent()
     total_scores = np.empty(EPISODES)
     for e in range(EPISODES):
 
@@ -189,39 +174,41 @@ if __name__ == "__main__":
         score = 0  # done
 
         while (not goal) and (not wumpus):
-            if train_agent.render:
+            if agent.render:
                 env.render()
 
-            action = train_agent.select_action(state)  # done  8
+            action = agent.select_action(state)  # done  8
             next_state, reward, goal, wumpus = env.step(action)  # done 10
             score += reward  # done 11
             state = ((state - np.mean(state)) / np.std(state))
             next_state = ((next_state - np.mean(next_state)) / np.std(next_state))
 
-            train_agent.MEMORY(state, action, reward, next_state, goal or wumpus)  # done 16
+            agent.MEMORY(state, action, reward / 100, next_state, goal or wumpus)  # done 16
             state = next_state.copy()
 
-            loss = train_agent.train_replay()
+            loss = agent.train_replay()
             losses.append(loss)
 
             iteration += 1
             if goal or wumpus:
-                train_agent.update_epsilon()
+                agent.update_epsilon()
                 break
             elif iteration % 200 == 0:
                 break
 
-        if e % COPY_STEPS == 0:
-            train_agent.update_target_model()
-            train_agent.learning_rate_decay()
+            if iteration % COPY_STEPS == 0:
+                agent.update_target_model()
+
+        if e % 50 == 0:
+            agent.learning_rate_decay()
 
         mean_loss = np.mean(losses)
         total_scores[e] = score
         avg_scores = total_scores[max(0, e - 100): (e + 1)].mean()
         logging.info(
             "episode: {:3}   \nepisode score: {:8.6}    \nepsilon {:.3}  \navg score (last 100): {:8.6}\nlosses: {:8.6} \n{}"
-                .format(e, float(score), float(train_agent.epsilon), avg_scores, mean_loss, 80 * '*'), )
+                .format(e, float(score), float(agent.epsilon), avg_scores, mean_loss, 80 * '*'), )
 
         # save the model every 100 episodes
         if e % 100 == 0:
-            train_agent.save_model()
+            agent.save_model()
