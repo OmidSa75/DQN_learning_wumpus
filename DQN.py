@@ -26,7 +26,6 @@ if physical_devices:
 
 EPISODES = 5000
 STATE_SIZE = 225
-COPY_STEPS = 500
 
 
 def create_model(input_size, output_size):
@@ -58,20 +57,20 @@ class DQNAgent:
         self.save_loc = './DQN'
         self.action_size = 4
         self.discount_factor = 0.99
-        self.learning_rate = 0.1
+        self.learning_rate = 0.01
         self.lr_decay = 0.95
         self.epsilon = 1.0
-        self.epsilon_decay = 0.999
+        self.epsilon_decay = 0.997
         self.epsilon_min = 0.01
-        self.batch_size = 32
-        self.train_start = 5000
+        self.batch_size = 128
+        self.train_start = 200
         self.state_size = STATE_SIZE
         self.model = self.build_model()
         self.optimizer = Adam(learning_rate=self.learning_rate)
         self.mse = tf.keras.losses.MeanSquaredError()
         self.target_model = self.build_model()
         self.update_target_model()
-        self.memory = deque(maxlen=100000)
+        self.memory = deque(maxlen=500)
 
         if self.load:
             self.load_model()
@@ -162,13 +161,14 @@ if __name__ == "__main__":
     env = Env()
     agent = DQNAgent()
     total_scores = np.empty(EPISODES)
+    iteration = 0
+
     for e in range(EPISODES):
 
         state = env.reset()
         check_list = env.check_if_reward(state)
         goal = check_list['if_goal']  # done
         wumpus = check_list['if_wumpus']  # done
-        iteration = 0
 
         losses = []
         score = 0  # done
@@ -190,15 +190,17 @@ if __name__ == "__main__":
             losses.append(loss)
 
             iteration += 1
-            if goal or wumpus:
+            if goal:
+                agent.update_target_model()
                 agent.update_epsilon()
                 break
 
-            if iteration % COPY_STEPS == 0:
-                agent.update_target_model()
+            elif wumpus:
+                agent.update_epsilon()
+                break
 
-        if e % 50 == 0:
-            agent.learning_rate_decay()
+        if e % 200 == 0:
+           agent.learning_rate_decay()
 
         mean_loss = np.mean(losses)
         total_scores[e] = score
